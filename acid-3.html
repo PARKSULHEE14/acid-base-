@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>중화적정 시뮬레이션</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            background-color: #f5f6fa;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h2 { color: #2c3e50; margin-bottom: 5px; }
+        
+        .condition-info {
+            background-color: #1e7e34;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .main-container {
+            display: flex;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            gap: 40px;
+            max-width: 1100px;
+            width: 100%;
+        }
+        
+        .apparatus-box {
+            flex: 1.2; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border-right: 2px dashed #dcdde1;
+            padding-right: 20px; 
+            position: relative;
+        }
+        
+        .burette-wrapper {
+            position: relative;
+            width: 70px;
+            height: 340px;
+            display: flex;
+            justify-content: center;
+        }
+        .burette-tube {
+            width: 26px;
+            height: 340px;
+            border: 2px solid #57606f;
+            border-bottom: none;
+            background-color: rgba(241, 242, 246, 0.4);
+            position: relative;
+            border-radius: 4px 4px 0 0;
+        }
+        .burette-fluid-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 300px;
+        }
+        .burette-fluid {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to right, rgba(52, 152, 219, 0.25), rgba(52, 152, 219, 0.15));
+            border-top: 2px solid #2980b9;
+            transition: height 0.1s linear;
+        }
+        .burette-ticks {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 300px;
+            pointer-events: none;
+        }
+        .tick {
+            position: absolute;
+            left: 0;
+            height: 1px;
+            background-color: #747d8c;
+        }
+        .tick.major {
+            width: 8px;
+            background-color: #2f3542;
+        }
+        .tick.major::after {
+            content: attr(data-value);
+            position: absolute;
+            left: 10px;
+            top: -6px;
+            font-size: 8px;
+            color: #2f3542;
+            font-family: Arial, sans-serif;
+        }
+        .tick.minor { width: 4px; }
+
+        .cock-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 10;
+        }
+        .burette-neck {
+            width: 10px;
+            height: 15px;
+            border-left: 2px solid #57606f;
+            border-right: 2px solid #57606f;
+            background: linear-gradient(to right, rgba(52, 152, 219, 0.25), rgba(52, 152, 219, 0.15));
+        }
+        .cock-holder {
+            width: 32px;
+            height: 20px;
+            background-color: #ced6e0;
+            border: 2px solid #57606f;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .cock-handle {
+            width: 26px;
+            height: 8px;
+            background-color: #2f3542;
+            border-radius: 2px;
+            transform: rotate(0deg);
+            transition: transform 0.1s ease;
+        }
+        .burette-tip {
+            width: 6px;
+            height: 20px;
+            border-left: 2px solid #57606f;
+            border-right: 2px solid #57606f;
+            border-bottom: 2px solid #57606f;
+            border-radius: 0 0 3px 3px;
+            background: linear-gradient(to right, rgba(52, 152, 219, 0.25), rgba(52, 152, 219, 0.15));
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 310px;
+            left: calc(50% + 35px); 
+            background: #f1f2f6;
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            border: 1px solid #dcdde1;
+            width: 140px;
+            z-index: 20;
+        }
+        
+        .slider-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #2f3542;
+            display: flex;
+            justify-content: space-between;
+            white-space: nowrap;
+            padding-left: 6px; 
+            padding-right: 2px;
+        }
+        .valve-slider {
+            width: 100%;
+            cursor: pointer;
+            margin-bottom: 0;
+        }
+
+        .slider-range-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: #747d8c;
+            padding: 0 4px;
+            margin-top: -2px;
+        }
+
+        .drop-stream {
+            width: 4px;
+            height: 110px; 
+            position: relative;
+            z-index: 1;
+        }
+        .drop-stream.flowing {
+            background: linear-gradient(to bottom, #2980b9, #3498db, transparent);
+            animation: streamAnim 0.15s infinite linear;
+        }
+        .drop-stream.dripping {
+            background: repeating-linear-gradient(to bottom, #2980b9 0px, #2980b9 4px, transparent 4px, transparent 20px);
+            animation: dripAnim 0.3s infinite linear;
+        }
+        @keyframes streamAnim { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+        @keyframes dripAnim { 0% { background-position: 0 0; } 100% { background-position: 0 40px; } }
+
+        .beaker-container {
+            position: relative;
+            width: 140px;
+            height: 120px;
+            margin-top: -35px;
+            z-index: 2;
+        }
+        .beaker {
+            width: 100%;
+            height: 100%;
+            border: 3px solid #57606f;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            position: relative;
+            background-color: rgba(255,255,255,0.5);
+            overflow: hidden; 
+        }
+        .beaker-fluid {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 40px; 
+            background-color: rgba(116, 125, 140, 0.08); 
+            border-top: 2px solid #747d8c; 
+            transition: all 0.1s linear;
+        }
+        .beaker-label {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 40%;
+            font-size: 11px;
+            font-weight: bold;
+            color: #2c3e50;
+            pointer-events: none;
+            z-index: 5;
+            line-height: 1.4;
+        }
+
+        .dashboard-box {
+            flex: 1.5; 
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .status-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            margin-top: 30px; 
+        }
+        .status-item { font-size: 14px; color: #2c3e50; }
+        .status-item span { font-weight: bold; color: #2980b9; }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 380px; 
+        }
+        button {
+            padding: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background-color: #95a5a6;
+            color: white;
+            transition: background 0.2s;
+            margin-top: auto; 
+        }
+        button:hover { background-color: #7f8c8d; }
+    </style>
+</head>
+<body>
+
+    <h2>중화적정 시뮬레이션</h2>
+    <div class="condition-info">비커: 0.1M HCl 25.0mL + 페놀프탈레인 2~3방울 🧪 뷰렛: 0.2M NaOH</div>
+
+    <div class="main-container">
+        <div class="apparatus-box">
+            
+            <div class="burette-wrapper">
+                <div class="burette-tube">
+                    <div class="burette-fluid-container">
+                        <div class="burette-fluid" id="buretteFluid"></div>
+                        <div class="burette-ticks" id="buretteTicks"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="cock-area">
+                <div class="burette-neck"></div>
+                <div class="cock-holder">
+                    <div class="cock-handle" id="cockHandle"></div>
+                </div>
+                <div class="burette-tip" id="buretteTip"></div>
+            </div>
+
+            <div class="control-panel">
+                <div class="slider-title">
+                    <span>코크 조작 레버</span>
+                    <span id="valveStatus" style="color:#7f8c8d;">닫힘(0°)</span>
+                </div>
+                <input type="range" id="valveSlider" class="valve-slider" min="0" max="90" value="0" oninput="handleSlider(this.value)">
+                
+                <div class="slider-range-labels">
+                    <span>0°</span>
+                    <span>90°</span>
+                </div>
+            </div>
+
+            <div class="drop-stream" id="dropStream"></div>
+            
+            <div class="beaker-container">
+                <div class="beaker">
+                    <div class="beaker-fluid" id="beakerFluid"></div>
+                    <div class="beaker-label" id="beakerLabel">HCl 25.0mL<br>+ 페놀프탈레인 2~3방울</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-box">
+            <div class="status-panel">
+                <div class="status-item">첨가된 NaOH 부피: <span id="txtVolume">0.00</span> mL</div>
+                <div class="status-item">현재 용액 pH: <span id="txtPH">1.00</span></div>
+                <div class="status-item">비커 속 혼합 부피: <span id="txtTotalVol">25.00</span> mL</div>
+                <div class="status-item">지시약 색상: <span id="txtColor" style="color: #7f8c8d;">무색</span></div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="titrationChart"></canvas>
+            </div>
+
+            <button onclick="resetExperiment()">실험 초기화</button>
+        </div>
+    </div>
+
+    <script>
+        const V_HCl = 25.0; 
+        const M_HCl = 0.1;  
+        const M_NaOH = 0.2; 
+        const MAX_BUR_VOL = 50.0; 
+
+        let v_added = 0.0;  
+        let currentAngle = 0;
+        let intervalId = null;
+
+        const ticksContainer = document.getElementById('buretteTicks');
+        for (let i = 0; i <= 50; i++) {
+            let tick = document.createElement('div');
+            tick.style.top = `${(i / 50) * 100}%`;
+            if (i % 5 === 0) {
+                tick.className = 'tick major';
+                tick.setAttribute('data-value', i + ".0");
+            } else {
+                tick.className = 'tick minor';
+            }
+            ticksContainer.appendChild(tick);
+        }
+
+        function calculatePH(v) {
+            let n_H = (M_HCl * V_HCl) / 1000;
+            let n_OH = (M_NaOH * v) / 1000;
+            let total_v = (V_HCl + v) / 1000;
+            if (n_H > n_OH) return -Math.log10((n_H - n_OH) / total_v);
+            if (Math.abs(n_H - n_OH) < 1e-9) return 7.0;
+            let pOH = -Math.log10((n_OH - n_H) / total_v);
+            return 14.0 - pOH;
+        }
+
+        function getPhenolphthaleinColor(pH) {
+            if (pH <= 8.2) return { text: "무색", css: "rgba(116, 125, 140, 0.08)", line: "#747d8c", txtCss: "#7f8c8d" };
+            if (pH >= 10.0) return { text: "붉은색", css: "rgba(235, 77, 75, 0.85)", line: "#b33939", txtCss: "#eb4d4b" };
+            let ratio = (pH - 8.2) / (10.0 - 8.2);
+            return {
+                text: "옅은 분홍색",
+                css: `rgba(235, 77, 75, ${ratio * 0.85})`,
+                line: `rgba(179, 57, 57, ${0.4 + ratio * 0.6})`,
+                txtCss: "#ff7675"
+            };
+        }
+
+        const ctx = document.getElementById('titrationChart').getContext('2d');
+        const titrationChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: '중화적정 곡선(pH)', 
+                    data: [{x: 0, y: 1.00}],
+                    borderColor: '#2980b9',
+                    backgroundColor: 'transparent', 
+                    borderWidth: 3,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { boxWidth: 30, boxHeight: 0, lineWidth: 3, font: { weight: 'bold' } }
+                    }
+                },
+                scales: {
+                    x: { 
+                        type: 'linear', 
+                        position: 'bottom', 
+                        title: { display: true, text: '첨가한 NaOH의 부피 (mL)' }, 
+                        min: 0, 
+                        max: 25,
+                        // 수정 포인트: stepSize를 1로 두어 눈금은 다 그리되, 짝수일 때만 숫자 출력
+                        ticks: {
+                            stepSize: 1,
+                            callback: function(value, index, ticks) {
+                                return value % 2 === 0 ? value : '';
+                            }
+                        }
+                    },
+                    y: { title: { display: true, text: 'pH' }, min: 0, max: 14, ticks: { stepSize: 2 } }
+                }
+            }
+        });
+
+        function handleSlider(value) {
+            currentAngle = parseInt(value);
+            const handle = document.getElementById('cockHandle');
+            const statusTxt = document.getElementById('valveStatus');
+            const dropStream = document.getElementById('dropStream');
+
+            handle.style.transform = `rotate(${currentAngle}deg)`;
+            if (intervalId) clearInterval(intervalId);
+
+            if (currentAngle === 0) {
+                statusTxt.textContent = "닫힘(0°)";
+                statusTxt.style.color = "#7f8c8d";
+                dropStream.className = "drop-stream";
+                return;
+            }
+
+            if (v_added >= 25.0) return;
+
+            let flowRate = 0.0; 
+            if (currentAngle <= 30) {
+                statusTxt.textContent = `미세(${currentAngle}°)`;
+                statusTxt.style.color = "#27ae60";
+                dropStream.className = "drop-stream dripping";
+                flowRate = 0.003 + (currentAngle * 0.0003); 
+            } else {
+                statusTxt.textContent = `연속(${currentAngle}°)`;
+                statusTxt.style.color = "#e74c3c";
+                dropStream.className = "drop-stream flowing";
+                flowRate = 0.02 + ((currentAngle - 30) * 0.003);
+            }
+
+            intervalId = setInterval(() => {
+                if (v_added < 25.0) {
+                    v_added += flowRate;
+                    if (v_added > 25.0) v_added = 25.0;
+                    updateUI();
+                } else {
+                    clearInterval(intervalId);
+                    document.getElementById('valveSlider').value = 0;
+                    handleSlider(0);
+                }
+            }, 30);
+        }
+
+        function updateUI() {
+            let currentPH = calculatePH(v_added);
+            let colorObj = getPhenolphthaleinColor(currentPH);
+
+            document.getElementById('txtVolume').textContent = v_added.toFixed(2);
+            document.getElementById('txtPH').textContent = currentPH.toFixed(2);
+            document.getElementById('txtTotalVol').textContent = (V_HCl + v_added).toFixed(2);
+            
+            const txtColor = document.getElementById('txtColor');
+            txtColor.textContent = colorObj.text;
+            txtColor.style.color = colorObj.txtCss;
+
+            let remainPercent = ((MAX_BUR_VOL - v_added) / MAX_BUR_VOL) * 100;
+            document.getElementById('buretteFluid').style.height = `${remainPercent}%`;
+
+            let beakerHeight = 40 + (v_added * 2.2); 
+            const beakerFluid = document.getElementById('beakerFluid');
+            beakerFluid.style.height = `${beakerHeight}px`;
+            beakerFluid.style.backgroundColor = colorObj.css;
+            beakerFluid.style.borderTopColor = colorObj.line; 
+
+            document.getElementById('beakerLabel').innerHTML = `혼합 용액 ${(V_HCl + v_added).toFixed(1)}mL<br><span style='font-size:10px; font-weight:normal; color:#7f8c8d;'>(HCl + NaOH)</span>`;
+
+            titrationChart.data.datasets[0].data.push({ x: v_added, y: currentPH });
+            titrationChart.update('none'); 
+        }
+
+        function resetExperiment() {
+            if (intervalId) clearInterval(intervalId);
+            v_added = 0.0;
+            document.getElementById('valveSlider').value = 0;
+            document.getElementById('cockHandle').style.transform = `rotate(0deg)`;
+            document.getElementById('valveStatus').textContent = "닫힘(0°)";
+            document.getElementById('valveStatus').style.color = "#7f8c8d";
+            document.getElementById('dropStream').className = "drop-stream";
+            document.getElementById('txtVolume').textContent = "0.00";
+            document.getElementById('txtPH').textContent = "1.00";
+            document.getElementById('txtTotalVol').textContent = "25.00";
+            const txtColor = document.getElementById('txtColor');
+            txtColor.textContent = "무색";
+            txtColor.style.color = "#7f8c8d";
+            document.getElementById('buretteFluid').style.height = "100%";
+            const beakerFluid = document.getElementById('beakerFluid');
+            beakerFluid.style.height = "40px";
+            beakerFluid.style.backgroundColor = "rgba(116, 125, 140, 0.08)";
+            beakerFluid.style.borderTopColor = "#747d8c";
+            document.getElementById('beakerLabel').innerHTML = "HCl 25.0mL<br>+ 페놀프탈레인 2~3방울";
+            titrationChart.data.datasets[0].data = [{ x: 0, y: 1.00 }];
+            titrationChart.update();
+        }
+    </script>
+</body>
+</html>
