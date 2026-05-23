@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>혈액 pH 수호대 (Blood pH Defender)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        body {
+            background-color: #ffeaea; 
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #bgCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        #game-container {
+            width: 100%;
+            max-width: 600px;
+            background-color: #ffffff; 
+            border: 4px solid #b91c1c; 
+            border-radius: 16px;
+            padding: 15px;
+            box-shadow: 0 10px 30px rgba(185, 28, 28, 0.25);
+            text-align: center;
+            position: relative;
+            z-index: 2; 
+        }
+        
+        #pause-overlay {
+            display: none; 
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            border-radius: 12px;
+            color: #fff;
+            z-index: 8;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer; 
+        }
+        #pause-overlay .main-msg {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        #pause-overlay .sub-msg {
+            font-size: 13px;
+            color: #ddd;
+            background: rgba(255,255,255,0.2);
+            padding: 6px 14px;
+            border-radius: 20px;
+        }
+
+        h1 {
+            font-size: 18px;
+            margin: 5px 0 10px 0;
+            color: #b91c1c;
+        }
+        .status-panel {
+            display: flex;
+            justify-content: space-between;
+            background-color: #fcebeb; 
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            border: 1px solid #e2a0a0;
+        }
+        #gauge-container {
+            background-color: #fcebeb;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #e2a0a0;
+        }
+        .gauge-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: #555;
+            margin-bottom: 5px;
+        }
+        #ph-bar-bg {
+            width: 100%;
+            height: 20px;
+            background: linear-gradient(to right, #ff3333 0%, #ffcd38 25%, #22c55e 45%, #22c55e 55%, #00bcd4 75%, #2196f3 100%);
+            border-radius: 10px;
+            position: relative;
+        }
+        #ph-pointer {
+            position: absolute;
+            top: -3px;
+            left: 50%;
+            width: 8px;
+            height: 26px;
+            background-color: #333; 
+            border: 2px solid #fff;
+            transform: translateX(-50%);
+            transition: left 0.15s ease-out;
+            border-radius: 4px;
+        }
+        #ph-text {
+            font-size: 26px;
+            font-weight: bold;
+            margin-top: 5px;
+            color: #22c55e;
+        }
+
+        #gameCanvas {
+            background-color: rgba(255, 230, 230, 0.7); 
+            border: 3px solid #b91c1c;
+            border-radius: 8px;
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+            height: auto;
+        }
+
+        #reaction-toast {
+            display: none;
+            position: absolute;
+            top: 45%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85%;
+            border: 3px solid #ffffff;
+            border-radius: 12px;
+            padding: 12px 8px;
+            color: white;
+            font-size: 15px;
+            font-weight: bold;
+            box-shadow: 0 0 25px rgba(0,0,0,0.5);
+            z-index: 9;
+            line-height: 1.4;
+            animation: pop-effect 0.15s ease-out;
+        }
+        @keyframes pop-effect {
+            0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        
+        .control-box {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .storage-title {
+            font-size: 11px;
+            color: #8a2e2e;
+            font-weight: bold;
+            text-align: left;
+            margin-bottom: 4px;
+        }
+        .buffer-storage {
+            background-color: #fcebeb;
+            padding: 8px;
+            border-radius: 10px;
+            border: 1px solid #e2a0a0;
+            display: flex;
+            justify-content: space-around;
+            width: 78%;
+        }
+        .drag-item {
+            width: 46%; 
+            padding: 8px 4px;
+            border-radius: 10px;
+            color: #fff;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: grab;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #drag-hco3 { background-color: #15803d; border: 2px solid #22c55e; }
+        #drag-h2co3 { background-color: #7e22ce; border: 2px solid #a855f7; }
+        
+        #btn-pause {
+            width: 20%;
+            height: 58px;
+            background-color: #4b5563;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.15);
+        }
+
+        .modal {
+            display: flex; 
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.85);
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            padding: 10px;
+        }
+        .modal-content {
+            background-color: #ffffff; 
+            padding: 20px;
+            border-radius: 12px;
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+            border: 4px solid #b91c1c;
+        }
+        .reason-box {
+            font-size: 13px;
+            line-height: 1.6;
+            margin: 12px 0;
+            background-color: #fcebeb;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: left;
+        }
+        .btn-action {
+            background-color: #b91c1c;
+            padding: 10px 30px;
+            font-size: 15px;
+            font-weight: bold;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .guide-item {
+            display: flex;
+            align-items: center;
+            margin: 6px 0;
+            padding: 6px;
+            background: #fff;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+        }
+        .guide-badge {
+            padding: 3px 6px;
+            border-radius: 4px;
+            color: #fff;
+            font-weight: bold;
+            font-size: 11px;
+            margin-right: 8px;
+            min-width: 75px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+
+<div id="game-container">
+    <div id="pause-overlay">
+        <div class="main-msg">⏸️ 일시정지 중</div>
+        <div class="sub-msg">▶️ 화면을 터치/클릭하면 게임이 재개됩니다</div>
+    </div>
+    
+    <div id="reaction-toast"></div>
+
+    <h1>🩸 실시간 혈액 완충작용 시뮬레이터</h1>
+    
+    <div class="status-panel">
+        <div>완충 성공: <span id="score-text" style="color:#15803d; font-size: 16px;">0</span> / 12 회</div>
+        <div>신체 상태: <span id="status-label" style="color:#22c55e;">정상 (안정)</span></div>
+    </div>
+
+    <div id="gauge-container">
+        <div class="gauge-labels">
+            <span>☠️ 산증 사망 (6.8 이하)</span>
+            <span>⚖️ 정상 혈액 (7.35~7.45)</span>
+            <span>☠️ 알칼리증 사망 (7.8 이상)</span>
+        </div>
+        <div id="ph-bar-bg">
+            <div id="ph-pointer"></div>
+        </div>
+        <div id="ph-text">pH 7.40</div>
+    </div>
+
+    <canvas id="gameCanvas" width="580" height="260"></canvas>
+    
+    <div class="storage-title" style="margin-top:10px;">🛡️ 완충 물질 저장 보관소 및 제어장치</div>
+    <div class="control-box">
+        <div class="buffer-storage">
+            <div id="drag-hco3" class="drag-item">
+                <span>🟢 탄산수소 이온</span>
+                <span style="font-size:10px;">(HCO₃⁻)</span>
+            </div>
+            <div id="drag-h2co3" class="drag-item">
+                <span>🔵 탄산 분자</span>
+                <span style="font-size:10px;">(H₂CO₃)</span>
+            </div>
+        </div>
+        <button id="btn-pause">⏸️ 일시정지</button>
+    </div>
+</div>
+
+<div id="start-modal" class="modal">
+    <div class="modal-content" style="border-color: #2563eb;">
+        <h2 style="margin-top:0; font-size: 20px; color: #2563eb;">🛡️ 혈액 pH 수호대 가이드</h2>
+        <div class="reason-box" style="background-color: #eff6ff;">
+            <p style="margin-top:0; font-weight:bold; text-align:center; font-size:14px; color:#1e40af;">
+                "인체의 혈액 pH 항상성을 안전하게 유지하세요!"
+            </p>
+            <p style="font-size: 12px; color:#374151; line-height: 1.4;">
+                외부 자극으로 인해 위에서 산성 및 염기성 이온들이 떨어집니다. 하단 보관소의 완충 물질을 <b>클릭/터치하여 드래그</b>한 뒤 다가오는 이온에 정확히 명중시키세요!
+            </p>
+            
+            <div class="guide-item">
+                <div class="guide-badge" style="background-color: #ff1111;">🔴 H₃O⁺ (산)</div>
+                <div style="font-size:11px; color:#4b5563;">하단의 <b>🟢 탄산수소 이온(HCO₃⁻)</b>을 드래그해서 맞추세요!</div>
+            </div>
+            <div class="guide-item">
+                <div class="guide-badge" style="background-color: #1199ff;">🔵 OH⁻ (염기)</div>
+                <div style="font-size:11px; color:#4b5563;">하단의 <b>🔵 탄산 분자(H₂CO₃)</b>를 드래그해서 맞추세요!</div>
+            </div>
+
+            <p style="font-size:11px; margin-bottom:0; color: #dc2626; font-weight:bold; text-align:center; margin-top:10px;">
+                ⚠️ 방어에 실패해 pH가 6.80 이하 혹은 7.80 이상이 되면 신체가 사망합니다!
+            </p>
+        </div>
+        <button id="btn-start-game" class="btn-action" style="background-color: #2563eb;">게임 시작하기</button>
+    </div>
+</div>
+
+<div id="result-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h2 id="modal-title" style="margin-top:0;">결과</h2>
+        <div id="modal-reason" class="reason-box"></div>
+        <button id="btn-restart" class="btn-action">다시 시도하기</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const bgCanvas = document.getElementById('bgCanvas');
+    const bgCtx = bgCanvas.getContext('2d');
+
+    const phPointer = document.getElementById('ph-pointer');
+    const phText = document.getElementById('ph-text');
+    const scoreText = document.getElementById('score-text');
+    const statusLabel = document.getElementById('status-label');
+    const pauseOverlay = document.getElementById('pause-overlay');
+    const btnPause = document.getElementById('btn-pause');
+    const toast = document.getElementById('reaction-toast');
+    
+    const startModal = document.getElementById('start-modal');
+    const btnStartGame = document.getElementById('btn-start-game');
+    const modal = document.getElementById('result-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalReason = document.getElementById('modal-reason');
+    const btnRestart = document.getElementById('btn-restart');
+
+    let currentPH = 7.40;
+    let score = 0;
+    const GOAL_SCORE = 12; 
+    let isGameOver = false;
+    let isPaused = false; 
+    let isToastActive = false; 
+    let isGameStarted = false; 
+    let spawnTimer = 0;
+    let spawnInterval = 90;
+    let toastTimer = null;
+
+    let enemies = [];   
+    let globalRbcList = []; 
+
+    let activeDragType = null; 
+    let isMouseDown = false;
+    let dragX = 0; let dragY = 0;
+
+    function resizeBg() {
+        bgCanvas.width = window.innerWidth || document.documentElement.clientWidth;
+        bgCanvas.height = window.innerHeight || document.documentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeBg);
+    resizeBg();
+
+    // 🩸 오리지널 도넛 모양 적혈구 디자인 완벽 복원
+    class GlobalRedBloodCell {
+        constructor(isGlobal) {
+            this.isGlobal = isGlobal;
+            this.x = Math.random() * (isGlobal ? window.innerWidth : canvas.width);
+            this.y = Math.random() * (isGlobal ? window.innerHeight : canvas.height);
+            this.radius = Math.random() * 14 + 14; 
+            this.speed = Math.random() * 0.4 + 0.2;
+        }
+        update() {
+            if (!isGameStarted || isPaused || isGameOver || isToastActive) return;
+            this.x -= this.speed;
+            let limit = this.isGlobal ? window.innerWidth : canvas.width;
+            if (this.x + this.radius < 0) {
+                this.x = limit + this.radius;
+                this.y = Math.random() * (this.isGlobal ? window.innerHeight : canvas.height);
+            }
+        }
+        draw(targetCtx) {
+            // 바깥 원반
+            targetCtx.beginPath();
+            targetCtx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            targetCtx.fillStyle = "rgba(224, 49, 49, 0.22)"; 
+            targetCtx.fill();
+            targetCtx.strokeStyle = "rgba(192, 34, 34, 0.45)";
+            targetCtx.lineWidth = 3;
+            targetCtx.stroke();
+            
+            // 안쪽 중앙 오목한 딤플(도넛 홈) 표현
+            targetCtx.beginPath();
+            targetCtx.arc(this.x, this.y, this.radius * 0.42, 0, Math.PI * 2);
+            targetCtx.fillStyle = "rgba(168, 24, 24, 0.25)";
+            targetCtx.fill();
+            targetCtx.closePath();
+        }
+    }
+
+    for(let i=0; i<22; i++) globalRbcList.push(new GlobalRedBloodCell(true)); 
+    for(let i=0; i<9; i++) globalRbcList.push(new GlobalRedBloodCell(false)); 
+
+    class Enemy {
+        constructor() {
+            this.x = Math.random() * (canvas.width - 120) + 60;
+            this.y = -25;
+            this.type = Math.random() < 0.5 ? 'H' : 'OH';
+            this.radius = 24; 
+            this.speed = 0.65; 
+        }
+        update() { 
+            if(!isGameStarted || isPaused || isGameOver || isToastActive) return; 
+            this.y += this.speed; 
+        }
+        draw() {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            
+            if (this.type === 'H') {
+                ctx.fillStyle = '#ff1111';
+                ctx.shadowColor = '#ff1111';
+            } else {
+                ctx.fillStyle = '#1199ff';
+                ctx.shadowColor = '#1199ff';
+            }
+            ctx.shadowBlur = 8;
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.type === 'H' ? 'H₃O⁺' : 'OH⁻', this.x, this.y);
+            ctx.restore();
+        }
+    }
+
+    function showCenterToast(text, mode) {
+        clearTimeout(toastTimer);
+        toast.innerText = text;
+        
+        if (mode === 'success-acid') toast.style.backgroundColor = "rgba(21, 128, 61, 0.95)"; 
+        else if (mode === 'success-alkali') toast.style.backgroundColor = "rgba(126, 34, 206, 0.95)"; 
+        else if (mode === 'error') toast.style.backgroundColor = "rgba(220, 38, 38, 0.95)"; 
+        else if (mode === 'alarm-acid') toast.style.backgroundColor = "rgba(185, 28, 28, 0.95)"; 
+        else if (mode === 'alarm-alkali') toast.style.backgroundColor = "rgba(29, 78, 216, 0.95)"; 
+        
+        toast.style.display = "block";
+        isToastActive = true; 
+        
+        let duration = mode.startsWith('alarm') ? 2500 : 1600; 
+        toastTimer = setTimeout(() => {
+            toast.style.display = "none";
+            isToastActive = false; 
+        }, duration);
+    }
+
+    const elHco3 = document.getElementById('drag-hco3');
+    const elH2co3 = document.getElementById('drag-h2co3');
+
+    elHco3.addEventListener('mousedown', (e) => startDrag('HCO3', e));
+    elH2co3.addEventListener('mousedown', (e) => startDrag('H2CO3', e));
+    elHco3.addEventListener('touchstart', (e) => startDrag('HCO3', e), { passive: false });
+    elH2co3.addEventListener('touchstart', (e) => startDrag('H2CO3', e), { passive: false });
+
+    window.addEventListener('mousemove', (e) => { if (isMouseDown) updateMousePos(e); });
+    window.addEventListener('touchmove', (e) => { if (isMouseDown) updateMousePos(e); }, { passive: false });
+
+    window.addEventListener('mouseup', () => handleDragEnd());
+    window.addEventListener('touchend', () => handleDragEnd());
+
+    function startDrag(type, e) {
+        if(!isGameStarted || isGameOver || isPaused || isToastActive) return; 
+        if (e.cancelable) e.preventDefault();
+        activeDragType = type;
+        isMouseDown = true;
+        updateMousePos(e);
+    }
+
+    function updateMousePos(e) {
+        if (e.cancelable) e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        
+        let clientX, clientY;
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+        
+        if (rect.width > 0 && rect.height > 0) {
+            dragX = (clientX - rect.left) * (canvas.width / rect.width);
+            dragY = (clientY - rect.top) * (canvas.height / rect.height);
+        }
+    }
+
+    function handleDragEnd() {
+        if (!isMouseDown) return;
+        
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            let enemy = enemies[i];
+            let dist = Math.hypot(enemy.x - dragX, enemy.y - dragY);
+
+            if (dist < enemy.radius + 24) {
+                if (enemy.type === 'H' && activeDragType === 'HCO3') {
+                    score++;
+                    scoreText.innerText = score;
+                    // 🧪 물분자 포함 정확한 화학반응식 표기
+                    showCenterToast("✅ 완충 성공: HCO₃⁻(aq) + H₃O⁺(aq) → H₂CO₃(aq) + H₂O(l)", 'success-acid');
+                    enemies.splice(i, 1);
+                    if (score >= GOAL_SCORE) winGame();
+                } 
+                else if (enemy.type === 'OH' && activeDragType === 'H2CO3') {
+                    score++;
+                    scoreText.innerText = score;
+                    showCenterToast("✅ 완충 성공: H₂CO₃(aq) + OH⁻(aq) → HCO₃⁻(aq) + H₂O(l)", 'success-alkali');
+                    enemies.splice(i, 1);
+                    if (score >= GOAL_SCORE) winGame();
+                } 
+                else {
+                    let failMsg = enemy.type === 'H' ? "❌ 결합 실패! 하이드로늄(H₃O⁺)은 🟢탄산수소이온으로 막아야 합니다!" : "❌ 결합 실패! 염기(OH⁻)는 🔵탄산분자로 막아야 합니다!";
+                    showCenterToast(failMsg, 'error');
+                }
+                break;
+            }
+        }
+        isMouseDown = false;
+        activeDragType = null;
+    }
+
+    function togglePause() {
+        if (!isGameStarted || isGameOver || isToastActive) return; 
+        isPaused = !isPaused;
+        if (isPaused) {
+            pauseOverlay.style.display = 'flex'; 
+            btnPause.innerText = '▶️ 게임 재개';
+            btnPause.style.backgroundColor = '#15803d';
+        } else {
+            pauseOverlay.style.display = 'none'; 
+            btnPause.innerText = '⏸️ 일시정지';
+            btnPause.style.backgroundColor = '#4b5563';
+        }
+    }
+    btnPause.addEventListener('click', togglePause);
+    pauseOverlay.addEventListener('click', togglePause);
+
+    function updatePH(amount) {
+        currentPH += amount;
+        currentPH = Math.round(currentPH * 100) / 100; 
+
+        let percentage = ((currentPH - 6.6) / (8.2 - 6.6)) * 100;
+        if(percentage < 0) percentage = 0;
+        if(percentage > 100) percentage = 100;
+        phPointer.style.left = `${percentage}%`;
+        phText.innerText = `pH ${currentPH.toFixed(2)}`;
+
+        if (currentPH >= 7.35 && currentPH <= 7.45) {
+            statusLabel.innerText = "정상 (안정)";
+            statusLabel.style.color = "#22c55e";
+            phText.style.color = "#22c55e";
+        } 
+        else if (currentPH >= 7.00 && currentPH < 7.35) {
+            statusLabel.innerText = "🚨 산증 위험 (Acidosis)";
+            statusLabel.style.color = "#ff3333";
+            phText.style.color = "#ff3333";
+            showCenterToast(`⚠️ 산증 위험 경고!\n혈액이 산성화되고 있습니다! (pH ${currentPH.toFixed(2)})`, 'alarm-acid');
+        } 
+        else if (currentPH > 7.45 && currentPH <= 7.70) {
+            statusLabel.innerText = "🚨 알칼리증 위험 (Alkalosis)";
+            statusLabel.style.color = "#ff3333";
+            phText.style.color = "#ff3333";
+            showCenterToast(`⚠️ 알칼리증 위험 경고!\n혈액이 알칼리화되고 있습니다! (pH ${currentPH.toFixed(2)})`, 'alarm-alkali');
+        }
+        else {
+            statusLabel.innerText = "‼️ 생명 위독 상태";
+            statusLabel.style.color = "#ff1111";
+            phText.style.color = "#ff1111";
+        }
+
+        if (currentPH <= 6.80 || currentPH >= 7.80) loseGame();
+    }
+
+    function winGame() {
+        isGameOver = true;
+        modalTitle.innerText = "🎉 항상성 유지 성공!";
+        modalTitle.style.color = "#22c55e";
+        modalReason.innerHTML = `<b>축하합니다! 목표로 하신 12회 완충작용을 완벽히 수행해냈습니다.</b><br><br>외부에서 산과 염기의 자극이 끊임없이 몰아쳤음에도 불구하고, 적절한 완충 물질(HCO₃⁻, H₂CO₃)을 매칭하여 혈액의 pH를 생존 범위인 <b>7.35 ~ 7.45</b> 사이로 유지시켰습니다.<br><br>덕분에 인체의 단백질과 효소들이 정상 기능을 유지하여, 생명체가 안전하게 생존할 수 있게 되었습니다!`;
+        modal.style.display = 'flex';
+    }
+
+    // 🔬 생명과학적 메커니즘 리포트 멘트 완벽 복원
+    function loseGame() {
+        isGameOver = true;
+        modalTitle.innerText = "☠️ 항상성 유지 실패 (사망)";
+        modalTitle.style.color = "#ff1111";
+        
+        let reason = "";
+        if (currentPH <= 6.80) {
+            reason = `<b>🚨 완충 시스템 한계 돌파 (pH ${currentPH.toFixed(2)})</b><br><br>하이드로늄 이온(H₃O⁺)을 막지 못해 혈액 pH가 <b>6.80 이하</b>로 감소했습니다. 혈액이 산성화되면서 온몸의 세포 단백질 형태가 굳어 효소 기능이 중단되었고, 결국 심장마비로 사망에 이르렀습니다.`;
+        } else {
+            reason = `<b>🚨 완충 시스템 한계 돌파 (pH ${currentPH.toFixed(2)})</b><br><br>수산화 이온(OH⁻)을 중화하지 못해 혈액 pH가 <b>7.80 이상</b>으로 치솟았습니다. 이로 인해 신경계 이온 밸런스가 파괴되어 전신 근육이 마비되고 호흡근 경련(호흡 마비)으로 인해 사망에 이르렀습니다.`;
+        }
+        modalReason.innerHTML = reason;
+        modal.style.display = 'flex';
+    }
+
+    btnStartGame.addEventListener('click', () => {
+        startModal.style.display = 'none';
+        isGameStarted = true;
+    });
+
+    btnRestart.addEventListener('click', () => {
+        currentPH = 7.40; 
+        score = 0; 
+        isGameOver = false; 
+        isPaused = false; 
+        isToastActive = false;
+        isGameStarted = false; 
+        enemies = []; 
+        scoreText.innerText = "0";
+        btnPause.innerText = '⏸️ 일시정지';
+        btnPause.style.backgroundColor = '#4b5563';
+        pauseOverlay.style.display = 'none';
+        toast.style.display = 'none';
+        updatePH(0);
+        modal.style.display = 'none';      
+        startModal.style.display = 'flex'; 
+    });
+
+    function gameLoop() {
+        bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+        globalRbcList.forEach(rbc => {
+            if(rbc.isGlobal) { rbc.update(); rbc.draw(bgCtx); }
+        });
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        globalRbcList.forEach(rbc => {
+            if(!rbc.isGlobal) { rbc.update(); rbc.draw(ctx); }
+        });
+
+        ctx.strokeStyle = 'rgba(185, 28, 28, 0.6)';
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(0, canvas.height - 8); ctx.lineTo(canvas.width, canvas.height - 8); ctx.stroke();
+
+        if (isGameStarted && !isPaused && !isGameOver && !isToastActive) {
+            spawnTimer++;
+            if (spawnTimer >= spawnInterval) {
+                enemies.push(new Enemy());
+                spawnTimer = 0;
+            }
+        }
+
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            let e = enemies[i];
+            e.update(); 
+            e.draw();
+
+            if (e.y >= canvas.height - 8) {
+                if (e.type === 'H') updatePH(-0.15);
+                else updatePH(0.15);
+                enemies.splice(i, 1);
+            }
+        }
+
+        if (isMouseDown) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(dragX, dragY, 20, 0, Math.PI * 2);
+            ctx.fillStyle = activeDragType === 'HCO3' ? 'rgba(34, 197, 94, 0.85)' : 'rgba(168, 85, 247, 0.85)';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+</script>
+
+</body>
+</html>
