@@ -23,6 +23,7 @@
             min-height: 100vh;
             overflow: hidden;
             position: relative;
+            touch-action: none; /* 모바일 전체 화면 스크롤 바운스 방지 */
         }
 
         #bgCanvas {
@@ -136,6 +137,7 @@
             margin: 0 auto;
             max-width: 100%;
             height: auto;
+            touch-action: none; /* 캔버스 내 터치 스크롤 제스처 방지 */
         }
 
         #reaction-toast {
@@ -181,6 +183,7 @@
             display: flex;
             justify-content: space-around;
             width: 78%;
+            touch-action: none; /* 보관소 영역 스크롤 방지 */
         }
         .drag-item {
             width: 46%; 
@@ -194,6 +197,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            touch-action: none; /* 아이템 터치 반응 지연 제거 */
         }
         #drag-hco3 { background-color: #15803d; border: 2px solid #22c55e; }
         #drag-h2co3 { background-color: #7e22ce; border: 2px solid #a855f7; }
@@ -402,7 +406,7 @@
     window.addEventListener('resize', resizeBg);
     resizeBg();
 
-    // 🩸 오리지널 도넛 모양 적혈구 디자인 완벽 복원
+    // 🩸 복원 완료: 도넛 모양 생체 적혈구 그래픽
     class GlobalRedBloodCell {
         constructor(isGlobal) {
             this.isGlobal = isGlobal;
@@ -430,7 +434,7 @@
             targetCtx.lineWidth = 3;
             targetCtx.stroke();
             
-            // 안쪽 중앙 오목한 딤플(도넛 홈) 표현
+            // 안쪽 오목한 도넛 딤플 효과
             targetCtx.beginPath();
             targetCtx.arc(this.x, this.y, this.radius * 0.42, 0, Math.PI * 2);
             targetCtx.fillStyle = "rgba(168, 24, 24, 0.25)";
@@ -504,6 +508,7 @@
     const elHco3 = document.getElementById('drag-hco3');
     const elH2co3 = document.getElementById('drag-h2co3');
 
+    // 🛠️ 고도화된 터치 방어막 이벤트 설정
     elHco3.addEventListener('mousedown', (e) => startDrag('HCO3', e));
     elH2co3.addEventListener('mousedown', (e) => startDrag('H2CO3', e));
     elHco3.addEventListener('touchstart', (e) => startDrag('HCO3', e), { passive: false });
@@ -517,14 +522,14 @@
 
     function startDrag(type, e) {
         if(!isGameStarted || isGameOver || isPaused || isToastActive) return; 
-        if (e.cancelable) e.preventDefault();
+        if (e.cancelable) e.preventDefault(); // 스크롤 완전 락
         activeDragType = type;
         isMouseDown = true;
         updateMousePos(e);
     }
 
     function updateMousePos(e) {
-        if (e.cancelable) e.preventDefault();
+        if (isMouseDown && e.cancelable) e.preventDefault();
         const rect = canvas.getBoundingClientRect();
         
         let clientX, clientY;
@@ -537,6 +542,7 @@
         }
         
         if (rect.width > 0 && rect.height > 0) {
+            // 디스플레이 배율 오차 전면 보정
             dragX = (clientX - rect.left) * (canvas.width / rect.width);
             dragY = (clientY - rect.top) * (canvas.height / rect.height);
         }
@@ -549,11 +555,11 @@
             let enemy = enemies[i];
             let dist = Math.hypot(enemy.x - dragX, enemy.y - dragY);
 
-            if (dist < enemy.radius + 24) {
+            // 모바일 터치 오차를 감안해 히트박스 판정 범위 완화 (30px)
+            if (dist < enemy.radius + 30) {
                 if (enemy.type === 'H' && activeDragType === 'HCO3') {
                     score++;
                     scoreText.innerText = score;
-                    // 🧪 물분자 포함 정확한 화학반응식 표기
                     showCenterToast("✅ 완충 성공: HCO₃⁻(aq) + H₃O⁺(aq) → H₂CO₃(aq) + H₂O(l)", 'success-acid');
                     enemies.splice(i, 1);
                     if (score >= GOAL_SCORE) winGame();
@@ -632,11 +638,11 @@
         isGameOver = true;
         modalTitle.innerText = "🎉 항상성 유지 성공!";
         modalTitle.style.color = "#22c55e";
-        modalReason.innerHTML = `<b>축하합니다! 목표로 하신 12회 완충작용을 완벽히 수행해냈습니다.</b><br><br>외부에서 산과 염기의 자극이 끊임없이 몰아쳤음에도 불구하고, 적절한 완충 물질(HCO₃⁻, H₂CO₃)을 매칭하여 혈액의 pH를 생존 범위인 <b>7.35 ~ 7.45</b> 사이로 유지시켰습니다.<br><br>덕분에 인체의 단백질과 효소들이 정상 기능을 유지하여, 생명체가 안전하게 생존할 수 있게 되었습니다!`;
+        modalReason.innerHTML = `<b>축하합니다! 목표로 하신 12회 완충작용을 완벽히 수행해냈습니다.</b><br><br>외부에서 산과 염기의 자극이 끊임없이 몰아쳤음에도 불구하고, 적절한 완충 물질(HCO₃⁻, H₂CO₃)을 매칭하여 혈액의 pH를 생존 범위인 <b>7.35 ~ 7.45</b> 사이로 유지시켰습니다.<br><br>덕분에 인체의 단백질และ 효소들이 정상 기능을 유지하여, 생명체가 안전하게 생존할 수 있게 되었습니다!`;
         modal.style.display = 'flex';
     }
 
-    // 🔬 생명과학적 메커니즘 리포트 멘트 완벽 복원
+    // 🔬 생체 팩트 및 오리지널 멘트 완벽 복원
     function loseGame() {
         isGameOver = true;
         modalTitle.innerText = "☠️ 항상성 유지 실패 (사망)";
@@ -710,6 +716,7 @@
             }
         }
 
+        // 실시간 터치 가이드 링 활성화 (터치 피드백 강화)
         if (isMouseDown) {
             ctx.save();
             ctx.beginPath();
