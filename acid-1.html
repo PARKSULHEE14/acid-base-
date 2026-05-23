@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>브뢴스테드･라우리 산 염기 시뮬레이터 (긴급 복구판)</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #f8f9fa; padding: 20px; }
+        .card { width: 880px; margin: 0 auto; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        #canvas-container { position: relative; width: 800px; height: 320px; margin: 20px auto; background: #fff; border: 2px solid #eee; border-radius: 15px; }
+        .status-box { margin: 20px auto; padding: 15px 20px; background: #ececec; border-radius: 12px; width: 800px; border: 1px solid #ccc; }
+        .formula-row { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 2.2rem; font-weight: bold; height: 60px; }
+        .label-row { display: flex; align-items: center; justify-content: center; gap: 10px; height: 55px; margin-top: 10px; }
+        .specie-box { width: 160px; text-align: center; }
+        .plus-box { width: 30px; text-align: center; }
+        .focus-black { color: #000; opacity: 1; }
+        .blur-gray { color: #bbb; }
+        .large-label { font-size: 1.6rem; font-weight: bold; cursor: pointer; color: #888; background: #fff; border: 2.5px dashed #ccc; border-radius: 10px; padding: 8px 0; visibility: hidden; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .large-label.visible { visibility: visible; }
+        .large-label.hint { animation: blink 1s infinite alternate; border-color: #007bff; color: #007bff; }
+        @keyframes blink { from { opacity: 1; } to { opacity: 0.7; } }
+        .acid-active { color: #e63946 !important; border-style: solid !important; border-color: #e63946 !important; background: #fff1f2 !important; } 
+        .base-active { color: #0077b6 !important; border-style: solid !important; border-color: #0077b6 !important; background: #f0f9ff !important; }
+        .formula-acid { color: #e63946 !important; }
+        .formula-base { color: #0077b6 !important; }
+        .arrow-box { width: 70px; display: flex; flex-direction: column; align-items: center; font-size: 2.5rem; color: #ccc; line-height: 0.6; }
+        .arrow-active { color: #000 !important; font-weight: bold; }
+        sub { font-size: 0.55em; vertical-align: -0.4em; }
+        sup { font-size: 0.75em; vertical-align: 0.6em; }
+        .controls { margin-top: 20px; display: flex; justify-content: center; gap: 15px; }
+        button { padding: 15px 35px; font-size: 1.15rem; border-radius: 12px; border: none; cursor: pointer; color: white; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #forward-btn { background: #007bff; }
+        #reverse-btn { background: #ff5e78; } /* 체리 핑크 */
+        button:disabled { background: #ccc !important; cursor: default; box-shadow: none; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>브뢴스테드･라우리 산 염기</h1>
+    <div id="canvas-container"><canvas id="simCanvas" width="800" height="320"></canvas></div>
+    <div class="status-box">
+        <div class="formula-row" id="formula-row"></div>
+        <div class="label-row" id="label-row"></div>
+    </div>
+    <div class="controls">
+        <select id="reaction-select" style="padding:12px; border-radius:10px; font-size:1rem;" onchange="initReaction()">
+            <option value="hcl_nh3">1. 염산(HCl) + 암모니아(NH₃)</option>
+            <option value="h2co3_h2o">2. 탄산(H₂CO₃) + 물(H₂O)</option>
+            <option value="hco3_h2o_base">3. 탄산수소 이온(HCO₃⁻) + 물(H₂O)</option>
+        </select>
+        <button id="forward-btn" onclick="startForward()">▶ 정반응 시작</button>
+        <button id="reverse-btn" onclick="startReverse()" disabled>◀ 역반응 시작</button>
+        <button style="background:#6c757d" onclick="initReaction()">초기화</button>
+    </div>
+</div>
+<script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    const ATOMS = { H: { color: '#ff4757', r: 15, name: 'H' }, O: { color: '#1e90ff', r: 22, name: 'O' }, C: { color: '#a4b0be', r: 22, name: 'C' }, Cl: { color: '#2ed573', r: 28, name: 'Cl' }, N: { color: '#ffa502', r: 22, name: 'N' } };
+    let molecules = [], movingProton = null, isMoving = false;
+    let labelState = { revealed: [false, false, false, false], mode: 'ready', hint: false, isFinished: false };
+
+    function drawCharge(x, y, atomName, charge) {
+        if (!charge) return;
+        ctx.fillStyle = '#ff4757'; ctx.font = 'bold 26px sans-serif'; ctx.textAlign = 'left';
+        let xOff = (atomName === 'H') ? 18 : 35;
+        let yOff = -15; 
+        ctx.fillText(charge, x + xOff, y + yOff);
+    }
+
+    function drawBall(x, y, atom, charge = '') {
+        ctx.beginPath(); ctx.arc(x, y, atom.r, 0, Math.PI * 2);
+        ctx.fillStyle = atom.color; ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = 'white'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(atom.name, x, y);
+        if (charge) drawCharge(x, y, atom.name, charge);
+    }
+
+    const scenarios = {
+        hcl_nh3: {
+            f: ["HCl", "NH3", "Cl-", "NH4+"], roles: ["산", "염기", "염기", "산"],
+            start: { m1: { atoms: [{t:'Cl', dx:0, dy:0}, {t:'H', dx:35, dy:0}] }, m2: { atoms: [{t:'N', dx:0, dy:0}, {t:'H', dx:-22, dy:20}, {t:'H', dx:22, dy:20}, {t:'H', dx:0, dy:-28}] } },
+            end: { m1: { atoms: [{t:'Cl', dx:0, dy:0, c:'-'}] }, m2: { atoms: [{t:'N', dx:0, dy:0, c:'+'}, {t:'H', dx:-22, dy:20}, {t:'H', dx:22, dy:20}, {t:'H', dx:0, dy:-28}, {t:'H', dx:0, dy:30}] } }
+        },
+        h2co3_h2o: {
+            f: ["H2CO3", "H2O", "HCO3-", "H3O+"], roles: ["산", "염기", "염기", "산"],
+            start: { m1: { atoms: [{t:'C', dx:0, dy:0}, {t:'O', dx:0, dy:-35}, {t:'O', dx:-30, dy:20}, {t:'O', dx:30, dy:20}, {t:'H', dx:-50, dy:35}, {t:'H', dx:50, dy:35}] },
+                     m2: { atoms: [{t:'O', dx:0, dy:0}, {t:'H', dx:-22, dy:18}, {t:'H', dx:22, dy:18}] } },
+            end: { m1: { atoms: [{t:'C', dx:0, dy:0}, {t:'O', dx:0, dy:-35, c:'-'}, {t:'O', dx:-30, dy:20}, {t:'O', dx:30, dy:20}, {t:'H', dx:50, dy:35}] },
+                   m2: { atoms: [{t:'O', dx:0, dy:0}, {t:'H', dx:-22, dy:18}, {t:'H', dx:22, dy:18}, {t:'H', dx:0, dy:-28, c:'+'}] } }
+        },
+        hco3_h2o_base: {
+            f: ["HCO3-", "H2O", "H2CO3", "OH-"], roles: ["염기", "산", "산", "염기"],
+            start: { m1: { atoms: [{t:'C', dx:0, dy:0}, {t:'O', dx:0, dy:-35, c:'-'}, {t:'O', dx:-30, dy:20}, {t:'O', dx:30, dy:20}, {t:'H', dx:50, dy:35}] },
+                     m2: { atoms: [{t:'O', dx:0, dy:0}, {t:'H', dx:-22, dy:18}, {t:'H', dx:22, dy:18}] } },
+            end: { m1: { atoms: [{t:'C', dx:0, dy:0}, {t:'O', dx:0, dy:-35}, {t:'O', dx:-30, dy:20}, {t:'O', dx:30, dy:20}, {t:'H', dx:-50, dy:35}, {t:'H', dx:50, dy:35}] },
+                   m2: { atoms: [{t:'O', dx:0, dy:0, c:'-'}, {t:'H', dx:-22, dy:18}] } }
+        }
+    };
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        molecules.forEach(m => m.atoms.forEach(a => drawBall(m.x + a.dx, m.y + a.dy, ATOMS[a.t], a.c)));
+        if (movingProton) {
+            drawBall(movingProton.x, movingProton.y, ATOMS.H);
+            drawCharge(movingProton.x, movingProton.y, 'H', '+');
+        }
+    }
+
+    function initReaction() {
+        const type = document.getElementById('reaction-select').value;
+        const data = scenarios[type].start;
+        molecules = [{ x: 220, y: 150, atoms: JSON.parse(JSON.stringify(data.m1.atoms)) }, { x: 580, y: 150, atoms: JSON.parse(JSON.stringify(data.m2.atoms)) }];
+        movingProton = null; isMoving = false; labelState = { revealed: [false, false, false, false], mode: 'ready', hint: false, isFinished: false };
+        document.getElementById('forward-btn').disabled = false; document.getElementById('reverse-btn').disabled = true;
+        updateDisplay('ready'); draw();
+    }
+
+    function startForward() {
+        if (isMoving) return;
+        const type = document.getElementById('reaction-select').value;
+        const scen = scenarios[type];
+        labelState = { revealed: [false, false, false, false], mode: 'forward', hint: false, isFinished: false };
+        updateDisplay('forward');
+        let fIdx = (type === 'hco3_h2o_base') ? 1 : 0, tIdx = (type === 'hco3_h2o_base') ? 0 : 1;
+        molecules[fIdx].atoms = JSON.parse(JSON.stringify(type === 'hco3_h2o_base' ? scen.end.m2.atoms : scen.end.m1.atoms));
+        let sP = (type === 'hcl_nh3') ? {dx:35, dy:0} : (type === 'h2co3_h2o' ? {dx:-50, dy:35} : {dx:22, dy:18});
+        let eP = (type === 'hcl_nh3') ? {dx:0, dy:30} : (type === 'h2co3_h2o' ? {dx:0, dy:-28} : {dx:-50, dy:35});
+        animate(fIdx, tIdx, sP, eP, (type==='hco3_h2o_base'?scen.end.m1:scen.end.m2), 'reverse');
+    }
+
+    function startReverse() {
+        if (isMoving) return;
+        const type = document.getElementById('reaction-select').value;
+        const scen = scenarios[type];
+        labelState = { revealed: [false, false, false, false], mode: 'reverse', hint: false, isFinished: false };
+        updateDisplay('reverse');
+        let fIdx = (type === 'hco3_h2o_base') ? 0 : 1, tIdx = (type === 'hco3_h2o_base') ? 1 : 0;
+        molecules[fIdx].atoms = JSON.parse(JSON.stringify(type === 'hco3_h2o_base' ? scen.start.m1.atoms : scen.start.m2.atoms));
+        let sP = (type === 'hcl_nh3') ? {dx:0, dy:30} : (type === 'h2co3_h2o' ? {dx:0, dy:-28} : {dx:-50, dy:35});
+        let eP = (type === 'hcl_nh3') ? {dx:35, dy:0} : (type === 'h2co3_h2o' ? {dx:-50, dy:35} : {dx:22, dy:18});
+        animate(fIdx, tIdx, sP, eP, (tIdx===0?scen.start.m1:scen.start.m2), 'forward');
+    }
+
+    function animate(fI, tI, sP, eP, tN, nextBtn) {
+        isMoving = true; 
+        document.getElementById('forward-btn').disabled = true; document.getElementById('reverse-btn').disabled = true;
+        movingProton = { x: molecules[fI].x + sP.dx, y: molecules[fI].y + sP.dy };
+        const dX = molecules[tI].x + eP.dx, dY = molecules[tI].y + eP.dy;
+        function frame() {
+            const dx = dX - movingProton.x, dy = dY - movingProton.y, dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist > 1) { 
+                movingProton.x += dx * 0.12; movingProton.y += dy * 0.12; draw(); requestAnimationFrame(frame);
+            } else { 
+                molecules[tI].atoms = JSON.parse(JSON.stringify(tN.atoms));
+                movingProton = null; isMoving = false; labelState.isFinished = true; labelState.hint = true; 
+                document.getElementById(nextBtn + '-btn').disabled = false; updateDisplay(labelState.mode); draw(); 
+            }
+        }
+        frame();
+    }
+
+    function updateDisplay(mode) {
+        const type = document.getElementById('reaction-select').value;
+        const scen = scenarios[type];
+        const s = scen.f;
+        const formatChem = (str) => str.replace(/([0-9]+)/g, '<sub>$1</sub>').replace(/-/g, '<sup>⁻</sup>').replace(/\+/g, '<sup>⁺</sup>');
+        
+        const fCls = (idx) => {
+            if (labelState.revealed[idx]) return scen.roles[idx] === '산' ? 'formula-acid' : 'formula-base';
+            if (mode === 'ready') return 'focus-black'; 
+            const isActive = (mode === 'forward' && idx < 2) || (mode === 'reverse' && idx >= 2);
+            return isActive || labelState.isFinished ? 'focus-black' : 'blur-gray';
+        };
+
+        const arrF = (mode === 'ready' || mode === 'forward') ? 'arrow-active' : '';
+        const arrR = (mode === 'ready' || mode === 'reverse') ? 'arrow-active' : '';
+
+        document.getElementById('formula-row').innerHTML = `
+            <div class="specie-box ${fCls(0)}">${formatChem(s[0])}</div><div class="plus-box ${fCls(0)}">+</div>
+            <div class="specie-box ${fCls(1)}">${formatChem(s[1])}</div>
+            <div class="arrow-box"><span class="${arrF}">→</span><span class="${arrR}">←</span></div>
+            <div class="specie-box ${fCls(2)}">${formatChem(s[2])}</div><div class="plus-box ${fCls(2)}">+</div>
+            <div class="specie-box ${fCls(3)}">${formatChem(s[3])}</div>
+        `;
+
+        const container = document.getElementById('label-row'); container.innerHTML = '';
+        for (let i = 0; i < 4; i++) {
+            let isVisible = (mode === 'forward' && i < 2) || (mode === 'reverse' && i >= 2);
+            let btn = document.createElement('div');
+            btn.className = `specie-box large-label ${isVisible ? 'visible' : ''} ${labelState.hint && isVisible ? 'hint' : ''}`;
+            if (labelState.revealed[i]) { btn.classList.add(scen.roles[i] === '산' ? 'acid-active' : 'base-active'); btn.innerHTML = scen.roles[i];
+            } else { btn.innerHTML = '?'; btn.onclick = () => { labelState.revealed[i]=true; labelState.hint=false; updateDisplay(mode); }; }
+            container.appendChild(btn);
+            if (i === 0 || i === 2) container.appendChild(Object.assign(document.createElement('div'), {className:'plus-box'}));
+            else if (i === 1) container.appendChild(Object.assign(document.createElement('div'), {className:'arrow-box'}));
+        }
+    }
+    initReaction();
+</script>
+</body>
+</html>
