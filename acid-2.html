@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>pH-농도 정밀 시뮬레이션 V28 (약염기 암모니아 추가)</title>
+    <style>
+        :root { --primary: #4f46e5; --acid: #ef4444; --base: #3b82f6; --highlight: #f59e0b; --temp: #10b981; }
+        body { font-family: 'Pretendard', sans-serif; background: #f1f5f9; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        #app-container { background: white; padding: 30px; border-radius: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); width: 1150px; }
+
+        #main-stage { display: flex; justify-content: space-between; height: 650px; position: relative; }
+        #experiment-area { flex: 2.2; position: relative; background: #ffffff; border-radius: 20px; border: 1px solid #f1f5f9; overflow: hidden; }
+
+        /* 디지털 온도계 */
+        #temp-sensor { position: absolute; top: 20px; right: 25px; background: #1e293b; padding: 10px 15px; border-radius: 12px; border: 2px solid #334155; display: flex; flex-direction: column; align-items: center; z-index: 20; }
+        .sensor-label { color: #94a3b8; font-size: 10px; font-weight: 800; margin-bottom: 4px; letter-spacing: 0.5px; }
+        #temp-val { color: var(--temp); font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 800; }
+
+        /* 수도꼭지 */
+        #faucet-system { position: absolute; top: 120px; left: 220px; display: flex; flex-direction: column; align-items: center; z-index: 10; }
+        #faucet-label { background: #1e293b; color: white; padding: 8px 15px; border-radius: 10px; font-size: 14px; text-align: center; margin-bottom: 8px; font-weight: 700; border: 2px solid #475569; min-width: 120px; white-space: nowrap; }
+        .faucet-body { width: 55px; height: 22px; background: #94a3b8; border-radius: 4px; }
+        .faucet-nozzle { width: 22px; height: 12px; background: #64748b; border-radius: 0 0 6px 6px; }
+        #water-stream { width: 14px; height: 0; background: rgba(186, 230, 253, 0.8); transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        /* pH 미터 */
+        #electrode-system { position: absolute; top: 20px; left: 62%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; transition: transform 0.8s ease-in-out; z-index: 15; }
+        .meter-unit { background: #1e293b; width: 105px; height: 125px; border-radius: 15px; border: 4px solid #334155; display: flex; flex-direction: column; align-items: center; justify-content: space-around; padding: 5px 0; }
+        .meter-title { color: #94a3b8; font-size: 10px; font-weight: 800; letter-spacing: 1px; }
+        #ph-screen-val { color: var(--highlight); font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 800; background: #2d3748; min-width: 70px; height: 45px; display: flex; align-items: center; justify-content: center; border-radius: 5px; }
+        .probe-rod { width: 14px; height: 210px; background: linear-gradient(to right, #cbd5e1, #94a3b8); }
+        .probe-bulb { width: 24px; height: 24px; background: rgba(255,255,255,0.4); border: 2px solid #94a3b8; border-radius: 50%; margin-top: -12px; }
+
+        /* 비커 및 용액 (3/5 높이) */
+        #beaker-outer { position: absolute; bottom: 30px; left: 55%; transform: translateX(-50%); width: 450px; height: 320px; z-index: 5; }
+        #beaker-glass { width: 100%; height: 100%; border: 8px solid #94a3b8; border-top: none; border-radius: 0 0 50px 50px; position: relative; overflow: hidden; background: white; box-sizing: border-box; }
+        #liquid-fill { position: absolute; bottom: 0; width: 100%; height: 0; background: #f8fafc; transition: height 1.2s cubic-bezier(0.1, 0.5, 0.5, 1), background-color 1s; }
+
+        /* 사이드 패널 */
+        #control-panel-side { flex: 0.8; display: flex; flex-direction: column; gap: 20px; padding: 20px; border-left: 2px solid #e2e8f0; }
+        .box { background: #f8fafc; padding: 20px; border-radius: 20px; border: 1px solid #cbd5e1; }
+        select { width: 100%; padding: 12px; border-radius: 10px; font-weight: 700; margin-bottom: 10px; cursor: pointer; }
+        button { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 10px; font-weight: 800; cursor: pointer; }
+
+        .data-row { display: flex; align-items: center; gap: 15px; margin-bottom: 40px; }
+        .bar-out { height: 120px; width: 22px; background: #e2e8f0; border-radius: 11px; position: relative; overflow: hidden; }
+        .bar-in { position: absolute; bottom: 0; width: 100%; transition: height 0.8s ease-out; }
+        .h-highlight-num { color: var(--highlight); font-weight: 900; }
+        .empty-val { color: #cbd5e1; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <div id="main-stage">
+        <div id="experiment-area">
+            <div id="temp-sensor">
+                <div class="sensor-label">TEMPERATURE</div>
+                <div id="temp-val">25.0 °C</div>
+            </div>
+
+            <div id="faucet-system">
+                <div id="faucet-label">대기 중</div>
+                <div class="faucet-body"></div>
+                <div class="faucet-nozzle"></div>
+                <div id="water-stream"></div>
+            </div>
+            <div id="electrode-system">
+                <div class="meter-unit">
+                    <div class="meter-title">pH METER</div>
+                    <div id="ph-screen-val"></div>
+                </div>
+                <div class="probe-rod"></div>
+                <div class="probe-bulb"></div>
+            </div>
+            <div id="beaker-outer">
+                <div id="beaker-glass">
+                    <div id="liquid-fill"></div>
+                </div>
+            </div>
+        </div>
+        <div id="control-panel-side">
+            <div class="box">
+                <select id="sol-select" onchange="resetExperiment()">
+                    <option value="" disabled selected>용액을 선택하세요</option>
+                    <optgroup label="강산 (HCl)">
+                        <option value="HCl_0.1">0.1 M HCl(aq)</option>
+                        <option value="HCl_0.01">0.01 M HCl(aq)</option>
+                        <option value="HCl_0.001">0.001 M HCl(aq)</option>
+                    </optgroup>
+                    <optgroup label="약산 (CH₃COOH)">
+                        <option value="CH3COOH_0.1">0.1 M CH₃COOH(aq)</option>
+                    </optgroup>
+                    <optgroup label="강염기 (NaOH)">
+                        <option value="NaOH_0.1">0.1 M NaOH(aq)</option>
+                        <option value="NaOH_0.01">0.01 M NaOH(aq)</option>
+                        <option value="NaOH_0.001">0.001 M NaOH(aq)</option>
+                    </optgroup>
+                    <optgroup label="약염기 (NH₃)">
+                        <option value="NH3_0.1">0.1 M NH₃(aq)</option>
+                    </optgroup>
+                </select>
+                <button id="start-btn" onclick="startExperiment()">실험 시작</button>
+            </div>
+            <div class="visual-data">
+                <div class="data-row">
+                    <div class="bar-out"><div id="h-bar" class="bar-in" style="background:var(--acid); height: 0;"></div></div>
+                    <div>
+                        <div style="font-weight:800; font-size:15px; color:#475569;">[H₃O⁺] 농도(mol/L)</div>
+                        <div id="h-disp" style="font-size:24px; font-weight:900;" class="empty-val">---</div>
+                    </div>
+                </div>
+                <div class="data-row" style="opacity:0.8">
+                    <div class="bar-out"><div id="o-bar" class="bar-in" style="background:var(--base); height: 0;"></div></div>
+                    <div>
+                        <div style="font-weight:800; font-size:15px; color:#475569;">[OH⁻] 농도(mol/L)</div>
+                        <div id="o-disp" style="font-size:24px; font-weight:900;" class="empty-val">---</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const Kw = 1e-14;
+    let isRunning = false;
+
+    function resetExperiment() {
+        isRunning = false;
+        const sel = document.getElementById('sol-select');
+        document.getElementById('faucet-label').innerHTML = sel.value ? sel.options[sel.selectedIndex].text : "대기 중";
+        document.getElementById('liquid-fill').style.height = "0";
+        document.getElementById('ph-screen-val').innerText = "";
+        document.getElementById('electrode-system').style.transform = "translateY(0)";
+        document.getElementById('water-stream').style.height = "0";
+
+        document.getElementById('h-bar').style.height = "0";
+        document.getElementById('o-bar').style.height = "0";
+        document.getElementById('h-disp').innerHTML = "---";
+        document.getElementById('o-disp').innerHTML = "---";
+        document.getElementById('h-disp').className = "empty-val";
+        document.getElementById('o-disp').className = "empty-val";
+    }
+
+    function startExperiment() {
+        const sel = document.getElementById('sol-select');
+        if(!sel.value || isRunning) return;
+        isRunning = true;
+
+        const val = sel.value;
+        let ph = 7.0;
+        let h_conc_text = "";
+        let o_conc_text = "";
+
+        if (val === 'CH3COOH_0.1') {
+            ph = 2.87; 
+            h_conc_text = `<span class="h-highlight-num">1.3</span> × 10<sup class="h-highlight-num">-3</sup>`;
+            o_conc_text = `7.5 × 10<sup>-12</sup>`;
+        } else if (val === 'NH3_0.1') {
+            ph = 11.13; // pOH = 2.87 로부터 계산된 값
+            // 암모니아수의 하이드로늄 이온 농도에서도 앞자리 7.5와 지수 -12 세트 하이라이트
+            h_conc_text = `<span class="h-highlight-num">7.5</span> × 10<sup class="h-highlight-num">-12</sup>`;
+            o_conc_text = `1.3 × 10<sup>-3</sup>`;
+        } else {
+            const [type, cStr] = val.split('_');
+            const c = parseFloat(cStr);
+            let h = (type === 'HCl') ? c : Kw / c;
+            ph = -Math.log10(h);
+            h_conc_text = `1.0 × 10<sup class="h-highlight-num">-${ph.toFixed(0)}</sup>`;
+            o_conc_text = `1.0 × 10<sup>-${(14-ph).toFixed(0)}</sup>`;
+        }
+
+        const stream = document.getElementById('water-stream');
+        const liquid = document.getElementById('liquid-fill');
+
+        stream.style.height = "370px"; 
+        
+        setTimeout(() => {
+            liquid.style.height = "60%";
+            // 아세트산은 연한 붉은색, 암모니아는 약염기이므로 연한 푸른색 계열 연출
+            if (val.startsWith('HCl')) liquid.style.backgroundColor = "#fee2e2";
+            else if (val.startsWith('CH3COOH')) liquid.style.backgroundColor = "#fff1f2";
+            else if (val.startsWith('NH3')) liquid.style.backgroundColor = "#eff6ff";
+            else liquid.style.backgroundColor = "#dbeafe";
+            
+            setTimeout(() => { stream.style.height = "0"; }, 1200);
+
+            setTimeout(() => {
+                document.getElementById('electrode-system').style.transform = "translateY(185px)"; 
+                setTimeout(() => {
+                    document.getElementById('ph-screen-val').innerText = ph.toFixed(1);
+                    document.getElementById('h-bar').style.height = ((14 - ph) / 14 * 100) + "%";
+                    document.getElementById('o-bar').style.height = (ph / 14 * 100) + "%";
+                    
+                    document.getElementById('h-disp').className = "";
+                    document.getElementById('o-disp').className = "";
+                    document.getElementById('h-disp').innerHTML = h_conc_text;
+                    document.getElementById('o-disp').innerHTML = o_conc_text;
+                    isRunning = false;
+                }, 400);
+            }, 1200);
+        }, 500);
+    }
+
+    resetExperiment();
+</script>
+</body>
+</html>
